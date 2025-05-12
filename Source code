@@ -1,77 +1,151 @@
 import os
 import shutil
 import zipfile
-import tkinter as tk
-from tkinter import filedialog
 import re
-INPUT_XML = "text_ui_soul.xml"
+import threading
+import customtkinter as ctk
+from tkinter import filedialog
+
+INPUT_XML = "text_namethycompanions.xml"
 TEMP_FOLDER = "temp_mod_input"
-PAK_NAME = "English_xml.pak"
-def replace_names(pebble_name: str, herring_name: str, mutt_name: str) -> str:
+PAK_NAMES = [
+    "English_xml.pak", "Portuguese_xml.pak", "Italian_xml.pak", "Korean_xml.pak",
+    "Polish_xml.pak", "Russian_xml.pak", "ChineseS_xml.pak", "ChineseT_xml.pak",
+    "Turkish_xml.pak", "Ukrainian_xml.pak", "Czech_xml.pak", "French_xml.pak",
+    "German_xml.pak", "Japanese_xml.pak", "Spanish_xml.pak"
+]
+
+def replace_names(pebbles, herring, mutt):
     with open(INPUT_XML, 'r', encoding='utf-8') as f:
         content = f.read()
-        content = re.sub(r'\bPebbles\b', pebble_name, content)
-        content = re.sub(r'\bHerring\b', herring_name, content)
-        content = re.sub(r'\bMutt\b', mutt_name, content)
+    content = re.sub(r'\bPebbles\b', pebbles, content)
+    content = re.sub(r'\bHerring\b', herring, content)
+    content = re.sub(r'\bMutt\b', mutt, content)
     return content
-def prepare_temp(xml: str):
-    if os.path.isdir(TEMP_FOLDER): shutil.rmtree(TEMP_FOLDER)
-    os.makedirs(TEMP_FOLDER)
+
+def prepare_temp(xml_text):
+    if os.path.isdir(TEMP_FOLDER):
+        shutil.rmtree(TEMP_FOLDER)
+    os.makedirs(TEMP_FOLDER, exist_ok=True)
     with open(os.path.join(TEMP_FOLDER, INPUT_XML), 'w', encoding='utf-8') as f:
-        f.write(xml)
-def pack_pak():
-    zip_path = PAK_NAME + ".zip"
-    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
-        for root, _, files in os.walk(TEMP_FOLDER):
-            for fn in files:
-                ap = os.path.join(root, fn)
-                rp = os.path.relpath(ap, TEMP_FOLDER)
-                z.write(ap, rp)
-    if os.path.exists(PAK_NAME): os.remove(PAK_NAME)
-    os.rename(zip_path, PAK_NAME)
-def move_pak(base: str):
-    dest = os.path.join(base, "z_NameThyCompanions", "Localization")
-    os.makedirs(dest, exist_ok=True)
-    target = os.path.join(dest, PAK_NAME)
-    if os.path.exists(target): os.remove(target)
-    shutil.move(PAK_NAME, dest)
+        f.write(xml_text)
+
+def pack_pak(pak_name):
+    zip_path = pak_name + ".zip"
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        zipf.write(os.path.join(TEMP_FOLDER, INPUT_XML), INPUT_XML)
+    if os.path.exists(pak_name):
+        os.remove(pak_name)
+    os.rename(zip_path, pak_name)
+
+def move_paks(base_path):
+    mod_dir = os.path.join(base_path, "x_NameThyCompanions")
+    loc_dir = os.path.join(mod_dir, "Localization")
+    os.makedirs(loc_dir, exist_ok=True)
+    for pak in PAK_NAMES:
+        dst = os.path.join(loc_dir, pak)
+        if os.path.exists(dst):
+            os.remove(dst)
+        shutil.move(pak, dst)
+    manifest = """<?xml version="1.0" encoding="utf-8"?>
+<kcd_mod xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <info>
+    <name>Name Thy Companions</name>
+    <modid>namethycompanions</modid>
+    <description>Renames your companions!</description>
+    <author>Ozer</author>
+    <created_on>2025-05-12</created_on>
+    <version>1.0</version>
+  </info>
+</kcd_mod>
+"""
+    with open(os.path.join(mod_dir, "mod.manifest"), 'w', encoding='utf-8') as f:
+        f.write(manifest)
     shutil.rmtree(TEMP_FOLDER)
-def on_submit():
-    pebble_name = entry_pebble.get().strip()
-    herring_name = entry_herring.get().strip()
-    mutt_name = entry_mutt.get().strip()
-    base = entry_path.get().strip()
-    
-    if not pebble_name or not herring_name or not mutt_name or not base:
-        status.set("Error: All fields are required.")
-        return
-    xml = replace_names(pebble_name, herring_name, mutt_name)
-    prepare_temp(xml)
-    pack_pak()
-    move_pak(base)
-    status.set(f"{PAK_NAME} built with replacements.")
-def browse():
-    d = filedialog.askdirectory()
-    if d:
-        entry_path.delete(0, tk.END)
-        entry_path.insert(0, d)
-root = tk.Tk()
-root.title("Ozer's Companion Renamer")
-root.geometry("300x400")
-tk.Label(root, text="New Name for Pebbles:").pack(pady=2)
-entry_pebble = tk.Entry(root, width=30)
-entry_pebble.pack(pady=2)
-tk.Label(root, text="New Name for Herring:").pack(pady=2)
-entry_herring = tk.Entry(root, width=30)
-entry_herring.pack(pady=2)
-tk.Label(root, text="New Name for Mutt:").pack(pady=2)
-entry_mutt = tk.Entry(root, width=30)
-entry_mutt.pack(pady=2)
-tk.Label(root, text="Select Your Mods Folder:").pack(pady=2)
-entry_path = tk.Entry(root, width=30)
-entry_path.pack(pady=2)
-tk.Button(root, text="Browse Files", command=browse).pack(pady=2)
-tk.Button(root, text="Build Mod", command=on_submit, width=20, height=2).pack(pady=50)
-status = tk.StringVar()
-tk.Label(root, textvariable=status).pack(pady=4)
-root.mainloop()
+
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("dark-blue")
+
+class CompanionRenamerApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.title("Name Thy Companions")
+        self.geometry("420x460")
+        self.resizable(False, False)
+        self.center_window()
+
+        self.entries = {}
+        self.setup_ui()
+
+    def center_window(self):
+        self.update_idletasks()
+        w = self.winfo_width()
+        h = self.winfo_height()
+        x = (self.winfo_screenwidth() // 2) - (w // 2)
+        y = (self.winfo_screenheight() // 2) - (h // 2)
+        self.geometry(f"{w}x{h}+{x}+{y}")
+
+    def setup_ui(self):
+        frame = ctk.CTkFrame(self)
+        frame.pack(padx=20, pady=20, fill="both", expand=True)
+
+        ctk.CTkLabel(frame, text="Ozer's Companion Renamer", font=ctk.CTkFont(size=20, weight="bold")).pack(pady=(10, 20))
+
+        self.entries["Pebbles"] = self._add_entry(frame, "New Name for Pebbles")
+        self.entries["Herring"] = self._add_entry(frame, "New Name for Herring")
+        self.entries["Mutt"] = self._add_entry(frame, "New Name for Mutt")
+        self.entries["Mods Folder"] = self._add_entry(frame, "Mods Folder")
+
+        browse_button = ctk.CTkButton(frame, text="Browse Files", command=self.browse_folder)
+        browse_button.pack(pady=(5, 10))
+
+        self.progress_bar = ctk.CTkProgressBar(frame, width=250)
+        self.progress_bar.set(0)
+        self.progress_bar.pack(pady=(5, 10))
+
+        submit_button = ctk.CTkButton(frame, text="Finalize Mod", command=self.on_submit)
+        submit_button.pack(pady=(10, 10))
+
+        self.status_label = ctk.CTkLabel(frame, text="", font=ctk.CTkFont(size=12))
+        self.status_label.pack(pady=(5, 10))
+
+    def _add_entry(self, parent, label):
+        ctk.CTkLabel(parent, text=label + ":").pack()
+        entry = ctk.CTkEntry(parent, width=250)
+        entry.pack(pady=5)
+        return entry
+
+    def browse_folder(self):
+        path = filedialog.askdirectory()
+        if path:
+            self.entries["Mods Folder"].delete(0, 'end')
+            self.entries["Mods Folder"].insert(0, path)
+
+    def on_submit(self):
+        peb = self.entries["Pebbles"].get().strip()
+        her = self.entries["Herring"].get().strip()
+        mut = self.entries["Mutt"].get().strip()
+        base = self.entries["Mods Folder"].get().strip()
+
+        if not all([peb, her, mut, base]):
+            self.status_label.configure(text="Error: All fields required.")
+            return
+
+        threading.Thread(target=self.build_mod, args=(peb, her, mut, base), daemon=True).start()
+
+    def build_mod(self, peb, her, mut, base):
+        self.progress_bar.set(0.1)
+        xml_text = replace_names(peb, her, mut)
+        self.progress_bar.set(0.2)
+        prepare_temp(xml_text)
+        for idx, pak in enumerate(PAK_NAMES):
+            pack_pak(pak)
+            self.progress_bar.set(0.2 + 0.6 * ((idx + 1) / len(PAK_NAMES)))
+        move_paks(base)
+        self.progress_bar.set(1.0)
+        self.status_label.configure(text="Mod build completed.")
+
+if __name__ == "__main__":
+    app = CompanionRenamerApp()
+    app.mainloop()
